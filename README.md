@@ -1,4 +1,3 @@
-
 # AI Resume Screening System
 
 Lightweight Flask application that screens applicant resumes against company job descriptions using TF‑IDF and cosine similarity, and stores job/applicant records in SQLite.

@@ -8,10 +8,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__, template_folder="template", static_folder="static")
 
-UPLOAD_FOLDER = "uploads/resumes"
+UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "uploads/resumes")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-DB_PATH = "jobs.db"
+DB_PATH = os.environ.get("DB_PATH", "jobs.db")
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
@@ -498,5 +498,6 @@ def upload_resume():
 # ----------------------------
 
 if __name__ == "__main__":
-
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "True").lower() in ("1", "true", "yes")
+    app.run(host="0.0.0.0", port=port, debug=debug)
