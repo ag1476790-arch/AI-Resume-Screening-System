@@ -1,0 +1,16 @@
+Applicant_ID,Resume,Job_Description,Suitable
+1,Python SQL Machine Learning Git Flask,Python Developer SQL Machine Learning Git,1
+2,Java Spring Boot MySQL,Python Developer SQL Machine Learning Git,0
+3,Python Django HTML CSS JavaScript,Full Stack Python Developer Django HTML CSS JavaScript,1
+4,C++ Embedded Systems Microcontrollers,Python Developer Flask SQL,0
+5,Python Pandas NumPy Machine Learning TensorFlow,Data Scientist Python Pandas NumPy Machine Learning,1
+6,Java Android Kotlin,Data Scientist Python Machine Learning,0
+7,Python SQL Power BI Excel,Data Analyst Python SQL Power BI,1
+8,C# ASP.NET SQL Server,Python Data Analyst SQL,0
+9,React Node.js MongoDB Express,MERN Stack Developer,1
+10,Python Flask Docker AWS Git,Backend Python Developer Docker AWS,1
+11,HTML CSS Bootstrap,Python Backend Developer,0
+12,Python OpenCV Deep Learning TensorFlow,Computer Vision Engineer Python Deep Learning,1
+13,MATLAB Simulink,Computer Vision Engineer,0
+14,Python SQL Git Linux,Software Engineer Python SQL Git,1
+15,PHP Laravel MySQL,Python Software Engineer,0

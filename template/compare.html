@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Compare Applicant Resume</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/compare.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+
+<header>
+
+    <h2>AI Resume Screening System</h2>
+
+    <a href="/">Home</a>
+
+</header>
+
+<div class="container">
+
+    <h1>Compare Resume to Job Description</h1>
+
+    <form action="/compare" method="POST">
+
+        <label>Select Applicant</label>
+        <select name="applicant_id" required>
+            <option value="">Choose applicant</option>
+            {% for applicant in applicants %}
+            <option value="{{ applicant.id }}" {% if selected_applicant and selected_applicant.id == applicant.id %}selected{% endif %}>
+                {{ applicant.applicant_name }} ({{ applicant.email }})
+            </option>
+            {% endfor %}
+        </select>
+
+        <label>Select Job</label>
+        <select name="job_id" required>
+            <option value="">Choose job</option>
+            {% for job in jobs %}
+            <option value="{{ job.id }}" {% if selected_job and selected_job.id == job.id %}selected{% endif %}>
+                {{ job.job_title }} at {{ job.company_name }}
+            </option>
+            {% endfor %}
+        </select>
+
+        <button type="submit">Compare</button>
+
+    </form>
+
+    {% if result is defined and result is not none %}
+    <div class="result-card">
+        <h2>Comparison Result</h2>
+        <div class="result-row"><span>Applicant:</span> {{ selected_applicant.applicant_name }}</div>
+        <div class="result-row"><span>Job:</span> {{ selected_job.job_title }} at {{ selected_job.company_name }}</div>
+        <div class="result-row"><span>Similarity Score:</span> {{ similarity }}%</div>
+        <div class="result-row"><span>Minimum ATS Required:</span> {{ selected_job.minimum_score }}%</div>
+        <div class="result-row result-status {{ prediction|lower }}">
+            <span>Result:</span> {{ prediction }}
+        </div>
+        <div class="description-box">
+            <h3>Job Description</h3>
+            <p>{{ selected_job.job_description }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+</body>
+
+</html>

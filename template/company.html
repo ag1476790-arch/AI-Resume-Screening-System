@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Company Portal</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/company.css') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+
+<header>
+
+    <h2>AI Resume Screening System</h2>
+
+    <a href="/">Home</a>
+
+</header>
+
+<div class="container">
+
+    <h1>Company Portal</h1>
+
+    <form action="/submit_job" method="POST">
+
+        <input type="hidden" name="job_id" value="{{ job.id if job else '' }}">
+
+        <label>Company Name</label>
+
+        <input
+            type="text"
+            name="company_name"
+            placeholder="Enter Company Name"
+            value="{{ job.company_name if job else '' }}"
+            required
+        >
+
+        <label>Job Title</label>
+
+        <input
+            type="text"
+            name="job_title"
+            placeholder="Enter Job Title"
+            value="{{ job.job_title if job else '' }}"
+            required
+        >
+
+        <label>Job Description</label>
+
+        <textarea
+            name="job_description"
+            rows="6"
+            placeholder="Describe the Job"
+            required
+        >{{ job.job_description if job else '' }}</textarea>
+
+        <h3>Required Skills & Priority</h3>
+
+        <div class="skills">
+
+            <input type="text" name="skill1" placeholder="Skill 1" value="{{ job.skill1 if job else '' }}">
+            <input type="number" name="priority1" placeholder="Priority" value="{{ job.priority1 if job else '' }}">
+
+            <input type="text" name="skill2" placeholder="Skill 2" value="{{ job.skill2 if job else '' }}">
+            <input type="number" name="priority2" placeholder="Priority" value="{{ job.priority2 if job else '' }}">
+
+            <input type="text" name="skill3" placeholder="Skill 3" value="{{ job.skill3 if job else '' }}">
+            <input type="number" name="priority3" placeholder="Priority" value="{{ job.priority3 if job else '' }}">
+
+            <input type="text" name="skill4" placeholder="Skill 4" value="{{ job.skill4 if job else '' }}">
+            <input type="number" name="priority4" placeholder="Priority" value="{{ job.priority4 if job else '' }}">
+
+            <input type="text" name="skill5" placeholder="Skill 5" value="{{ job.skill5 if job else '' }}">
+            <input type="number" name="priority5" placeholder="Priority" value="{{ job.priority5 if job else '' }}">
+
+        </div>
+
+        <label>Minimum ATS Score (%)</label>
+
+        <input
+            type="number"
+            name="minimum_score"
+            placeholder="Example: 75"
+            value="{{ job.minimum_score if job else '' }}"
+            required
+        >
+
+        <!-- Submit Button -->
+
+        <button type="submit" class="submit-btn">
+
+            Submit Job
+
+        </button>
+
+    </form>
+
+    <!-- Company History Button -->
+
+    <button type="button" id="openHistory" class="history-btn">
+
+        View / Edit Previous Jobs
+
+    </button>
+
+</div>
+
+<div class="modal" id="historyModal" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h2>Previous Job Posts</h2>
+            <button type="button" class="close-modal" id="closeHistory">×</button>
+        </div>
+        <div class="modal-body">
+            {% if jobs %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Company</th>
+                        <th>Job Title</th>
+                        <th>Minimum ATS</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job_item in jobs %}
+                    <tr>
+                        <td>{{ job_item.id }}</td>
+                        <td>{{ job_item.company_name }}</td>
+                        <td>{{ job_item.job_title }}</td>
+                        <td>{{ job_item.minimum_score }}%</td>
+                        <td>{{ job_item.created_at }}</td>
+                        <td class="actions">
+                            <a href="/edit_job/{{ job_item.id }}" class="edit-btn">Edit</a>
+                            <a href="/delete_job/{{ job_item.id }}" class="delete-btn">Delete</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-state">No saved jobs yet. Submit a job to see it here.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+
+</body>
+
+</html>

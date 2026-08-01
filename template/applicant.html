@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Applicant Portal</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/applicant.css') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap"
+          rel="stylesheet">
+
+</head>
+
+<body>
+
+<header>
+
+    <h2>AI Resume Screening System</h2>
+
+    <a href="/">Home</a>
+
+</header>
+
+<div class="container">
+
+    <h1>Applicant Portal</h1>
+
+    <form action="/upload_resume"
+          method="POST"
+          enctype="multipart/form-data">
+
+        <input type="hidden" name="applicant_id" value="{{ applicant.id if applicant else '' }}">
+
+        <label>Full Name</label>
+
+        <input
+            type="text"
+            name="name"
+            placeholder="Enter Your Name"
+            value="{{ applicant.applicant_name if applicant else '' }}"
+            required
+        >
+
+        <label>Email Address</label>
+
+        <input
+            type="email"
+            name="email"
+            placeholder="Enter Your Email"
+            required
+        >
+
+        <label>Phone Number</label>
+
+        <input
+            type="text"
+            name="phone"
+            placeholder="Enter Your Phone Number"
+            required
+        >
+
+        <label>Highest Qualification</label>
+
+        <input
+            type="text"
+            name="qualification"
+            placeholder="Example: B.Tech CSE"
+            required
+        >
+
+        <label>Years of Experience</label>
+
+        <input
+            type="number"
+            name="experience"
+            min="0"
+            placeholder="Experience in Years"
+            required
+        >
+
+        <label>Upload Resume (PDF Only)</label>
+
+        <input
+            type="file"
+            name="resume"
+            accept=".pdf"
+            required
+        >
+
+        <button type="submit">
+
+            Submit Resume
+
+        </button>
+
+    </form>
+
+    <div class="action-buttons">
+        <button type="button" id="openApplicantHistory" class="history-btn">
+            View / Edit Resume History
+        </button>
+        <a href="/applicant_history" class="history-btn compare-link">
+            Applicant Suitability Overview
+        </a>
+        <a href="/compare" class="history-btn compare-link">
+            Compare Resume to Job
+        </a>
+    </div>
+
+</div>
+
+<div class="modal" id="applicantHistoryModal" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h2>Applicant History</h2>
+            <button type="button" class="close-modal" id="closeApplicantHistory">×</button>
+        </div>
+        <div class="modal-body">
+            {% if applicants %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>ATS Score</th>
+                        <th>Prediction</th>
+                        <th>Company</th>
+                        <th>Job</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for applicant_item in applicants %}
+                    <tr>
+                        <td>{{ applicant_item.id }}</td>
+                        <td>{{ applicant_item.applicant_name }}</td>
+                        <td>{{ applicant_item.ats_score }}%</td>
+                        <td>{{ applicant_item.prediction }}</td>
+                        <td>{{ applicant_item.applied_company }}</td>
+                        <td>{{ applicant_item.applied_job }}</td>
+                        <td class="actions">
+                            <a href="/view_result/{{ applicant_item.id }}" class="view-btn">View</a>
+                            <a href="/edit_applicant/{{ applicant_item.id }}" class="edit-btn">Edit</a>
+                            <a href="/delete_applicant/{{ applicant_item.id }}" class="delete-btn">Delete</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-state">No resume history yet. Submit your first resume to see it here.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>ATS Result</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/result.css') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet">
+
+</head>
+
+<body>
+
+<header>
+
+    <h2>AI Resume Screening System</h2>
+
+    <a href="/">Home</a>
+
+</header>
+
+<div class="container">
+
+    <h1>Resume Screening Result</h1>
+
+    <div class="result-card">
+
+        <h2>{{ name }}</h2>
+
+        <div class="score-box">
+
+            <div class="score">
+
+                <h3>Cosine Similarity</h3>
+                <p>{{ similarity }}%</p>
+
+            </div>
+
+            <div class="score">
+
+                <h3>Skill Score</h3>
+                <p>{{ skill_score }}%</p>
+
+            </div>
+
+            <div class="score">
+
+                <h3>ATS Score</h3>
+                <p>{{ ats_score }}%</p>
+
+            </div>
+
+        </div>
+
+        <div class="prediction">
+
+            {% if prediction == "Suitable" %}
+
+            <h2 class="success">
+                ✅ Suitable for this Job
+            </h2>
+
+            {% else %}
+
+            <h2 class="danger">
+                ❌ Not Suitable
+            </h2>
+
+            {% endif %}
+
+        </div>
+
+        <div class="lists">
+
+            <div class="list-box">
+
+                <h3>Matched Skills</h3>
+
+                <ul>
+
+                    {% for skill in matched %}
+
+                    <li>✔ {{ skill }}</li>
+
+                    {% endfor %}
+
+                </ul>
+
+            </div>
+
+            <div class="list-box">
+
+                <h3>Missing Skills</h3>
+
+                <ul>
+
+                    {% for skill in missing %}
+
+                    <li>✖ {{ skill }}</li>
+
+                    {% endfor %}
+
+                </ul>
+
+            </div>
+
+        </div>
+
+        <div class="buttons">
+
+            <a href="/" class="btn">Home</a>
+
+            <a href="/applicant" class="btn">
+                Upload Another Resume
+            </a>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>

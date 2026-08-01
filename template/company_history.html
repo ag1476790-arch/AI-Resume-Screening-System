@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Company Job History</title>
+
+    <link rel="stylesheet"
+    href="{{ url_for('static', filename='css/company_history.css') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap"
+    rel="stylesheet">
+
+</head>
+
+<body>
+
+<header>
+
+    <h2>Company Dashboard</h2>
+
+    <a href="/company">← Back</a>
+
+</header>
+
+<div class="container">
+
+    <h1>Previous Job Posts</h1>
+
+    <table>
+
+        <thead>
+
+            <tr>
+
+                <th>ID</th>
+                <th>Company</th>
+                <th>Job Title</th>
+                <th>Minimum ATS</th>
+                <th>Date</th>
+                <th>Action</th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+            {% for job in jobs %}
+
+            <tr>
+
+                <td>{{ job.id }}</td>
+
+                <td>{{ job.company_name }}</td>
+
+                <td>{{ job.job_title }}</td>
+
+                <td>{{ job.minimum_score }}%</td>
+
+                <td>{{ job.created_at }}</td>
+
+                <td>
+
+                    <a class="edit-btn"
+                    href="/edit_job/{{ job.id }}">
+                    Edit
+                    </a>
+
+                    <a class="delete-btn"
+                    href="/delete_job/{{ job.id }}">
+                    Delete
+                    </a>
+
+                </td>
+
+            </tr>
+
+            {% endfor %}
+
+        </tbody>
+
+    </table>
+
+    <div class="bottom">
+
+        <a href="/company" class="new-btn">
+
+            + Add New Job
+
+        </a>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>

@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ai-resume-screening-system
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0 $PORT app:app
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: 1

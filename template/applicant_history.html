@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+    <title>Applicant History</title>
+
+    <link rel="stylesheet"
+    href="{{ url_for('static',
+    filename='css/applicant_history.css') }}">
+
+</head>
+
+<body>
+
+<h1>Applicant History</h1>
+
+<table>
+
+<tr>
+
+<th>ID</th>
+
+<th>Name</th>
+
+<th>ATS Score</th>
+
+<th>Similarity</th>
+
+<th>Prediction</th>
+
+<th>Company</th>
+
+<th>Job</th>
+
+<th>Action</th>
+
+</tr>
+
+{% for applicant in applicants %}
+
+<tr>
+
+<td>{{ applicant.id }}</td>
+
+<td>{{ applicant.applicant_name }}</td>
+
+<td>{{ applicant.ats_score }}%</td>
+
+<td>{{ applicant.similarity_score }}%</td>
+
+<td>{{ applicant.prediction }}</td>
+
+<td>{{ applicant.applied_company }}</td>
+
+<td>{{ applicant.applied_job }}</td>
+
+<td>
+
+<a href="/view_result/{{ applicant.id }}">
+View
+
+</a>
+
+|
+
+<a href="/edit_applicant/{{ applicant.id }}">
+Edit
+
+</a>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</body>
+
+</html>

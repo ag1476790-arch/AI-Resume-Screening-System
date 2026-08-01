@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI Resume Screening System</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+
+<header>
+
+    <div class="logo">
+
+        <h2>AI Resume Screening System</h2>
+
+    </div>
+
+    <nav>
+
+        <ul>
+
+            <li><a href="/">Home</a></li>
+
+            <li><a href="/company">Company</a></li>
+
+            <li><a href="/applicant">Applicant</a></li>
+
+        </ul>
+
+    </nav>
+
+</header>
+
+
+<section class="hero">
+
+    <div class="hero-text">
+
+        <h1>AI Powered Resume Screening</h1>
+
+        <p>
+
+            Compare resumes with job descriptions using
+            TF-IDF, Cosine Similarity and Skill Priority Scoring.
+
+        </p>
+
+        <div class="buttons">
+
+            <a href="/company" class="btn">
+                Company Portal
+            </a>
+
+            <a href="/applicant" class="btn secondary">
+                Upload Resume
+            </a>
+
+        </div>
+
+    </div>
+
+    <div class="hero-image">
+
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="AI Resume">
+
+    </div>
+
+</section>
+
+
+<section class="features">
+
+    <h2>Project Features</h2>
+
+    <div class="cards">
+
+        <div class="card">
+
+            <h3>📄 Resume Upload</h3>
+
+            <p>
+                Upload resumes in PDF format.
+            </p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>🤖 AI Screening</h3>
+
+            <p>
+
+                Uses TF-IDF and Cosine Similarity
+                for resume matching.
+
+            </p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>⭐ ATS Score</h3>
+
+            <p>
+
+                Calculates ATS Score using
+                skill priority and similarity.
+
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<footer>
+
+    <p>
+
+        © 2026 AI Resume Screening System
+
+    </p>
+
+</footer>
+
+
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+
+</body>
+</html>
