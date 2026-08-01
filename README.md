@@ -57,32 +57,5 @@ Notes: The app uses a local SQLite database (`jobs.db`) and stores uploaded resu
 
 Render (recommended free option):
 
-1. Push your repository to GitHub.
-2. Create a free account at https://render.com and connect your GitHub repo.
-3. Render will pick up `render.yaml` or use these commands:
-
-	- Build command: `pip install -r requirements.txt`
-	- Start command: `gunicorn --bind 0.0.0.0 $PORT app:app`
-
-Azure App Service (quick):
-
-1. Create a resource group and run `az webapp up` from the repo root.
-2. Ensure `requirements.txt`, `Procfile`, and `runtime.txt` are present (they are included).
-
-Important: On hosted platforms the local SQLite file and local `uploads/` are not durable. For production, use managed storage (Blob/S3) and a hosted database.
-
-## Pushing to GitHub
-1. Create an empty repo on GitHub.
-2. Add remote and push:
-
-```bash
-git remote add origin https://github.com/<your-username>/<your-repo>.git
-git branch -M main
-git push -u origin main
-```
 
 ## License
-Choose a license for your project (MIT is common). Add a `LICENSE` file if you want to make this public.
-
----
-If you want, I can (a) push this repo to your GitHub (if you provide the repo URL), (b) walk you through Render deployment step-by-step, or (c) prepare a small note explaining how to migrate `jobs.db` and `uploads/` to cloud storage.
