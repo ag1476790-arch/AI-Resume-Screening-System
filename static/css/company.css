@@ -89,14 +89,33 @@ textarea{
 }
 
 .skills{
-
-    display:grid;
-
-    grid-template-columns:3fr 1fr;
-
-    gap:15px;
-
+    display:flex;
+    flex-direction:column;
+    gap:12px;
     margin-top:20px;
+}
+
+.skill-row{
+    display:grid;
+    grid-template-columns:3fr 1fr auto;
+    gap:15px;
+    align-items:center;
+}
+
+.add-skill,
+.remove-skill{
+    width:auto;
+    margin-top:0;
+    padding:10px 16px;
+    font-size:14px;
+}
+
+.add-skill{
+    background:#0f766e;
+}
+
+.remove-skill{
+    background:#dc2626;
 
 }
 
@@ -246,9 +265,11 @@ button:hover{
 }
 
 .skills{
+    gap:12px;
+}
 
+.skill-row{
     grid-template-columns:1fr;
-
 }
 
 }

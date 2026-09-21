@@ -93,6 +93,38 @@ input[type=file]{
 
 }
 
+select{
+    width:100%;
+    padding:12px;
+    border:1px solid #ccc;
+    border-radius:8px;
+    font-size:15px;
+    background:#fff;
+}
+
+.job-requirements{
+    margin-top:22px;
+    padding:20px;
+    border-left:4px solid #2563eb;
+    background:#eff6ff;
+}
+
+.job-requirements h2,
+.job-requirements h3{
+    margin-bottom:10px;
+    color:#1e3a8a;
+}
+
+.job-requirements p,
+.job-requirements li{
+    color:#334155;
+}
+
+.job-requirements ul{
+    margin:0;
+    padding-left:20px;
+}
+
 button{
 
     width:100%;

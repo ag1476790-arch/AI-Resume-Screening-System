@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS company_jobs(
 
     priority5 INTEGER,
 
+    skill_requirements TEXT,
+
     minimum_score INTEGER,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

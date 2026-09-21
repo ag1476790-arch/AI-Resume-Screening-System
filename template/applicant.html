@@ -36,6 +36,23 @@
 
         <input type="hidden" name="applicant_id" value="{{ applicant.id if applicant else '' }}">
 
+        <label for="job_id">Select Company and Position</label>
+
+        <select name="job_id" id="job_id" required>
+            <option value="">Choose a company and job</option>
+            {% for job in jobs %}
+            <option value="{{ job.id }}">{{ job.company_name }} - {{ job.job_title }}</option>
+            {% endfor %}
+        </select>
+
+        <div id="jobRequirements" class="job-requirements" hidden>
+            <h2 id="selectedJobTitle"></h2>
+            <p id="selectedJobDescription"></p>
+            <p><strong>Minimum ATS score:</strong> <span id="selectedMinimumScore"></span>%</p>
+            <h3>Required skills</h3>
+            <ul id="selectedSkills"></ul>
+        </div>
+
         <label>Full Name</label>
 
         <input
@@ -160,6 +177,32 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+<script>
+    const availableJobs = {{ jobs|tojson }};
+    const jobSelector = document.getElementById("job_id");
+    const requirements = document.getElementById("jobRequirements");
+
+    jobSelector.addEventListener("change", () => {
+        const selectedJob = availableJobs.find(job => String(job.id) === jobSelector.value);
+        if (!selectedJob) {
+            requirements.hidden = true;
+            return;
+        }
+
+        document.getElementById("selectedJobTitle").textContent =
+            `${selectedJob.company_name} - ${selectedJob.job_title}`;
+        document.getElementById("selectedJobDescription").textContent = selectedJob.job_description;
+        document.getElementById("selectedMinimumScore").textContent = selectedJob.minimum_score;
+        const skillsList = document.getElementById("selectedSkills");
+        skillsList.replaceChildren();
+        selectedJob.skills.forEach(skill => {
+            const item = document.createElement("li");
+            item.textContent = `${skill.name} (priority ${skill.priority})`;
+            skillsList.appendChild(item);
+        });
+        requirements.hidden = false;
+    });
+</script>
 
 </body>
 

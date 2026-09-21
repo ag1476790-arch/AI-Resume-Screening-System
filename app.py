@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for
 import os
 import sqlite3
+import json
 import pdfplumber
 from datetime import datetime
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from models.predictor import predict_resume
 
 app = Flask(__name__, template_folder="template", static_folder="static")
 
@@ -42,10 +44,16 @@ def init_db():
             skill5 TEXT,
             priority5 INTEGER,
             minimum_score INTEGER NOT NULL,
+            skill_requirements TEXT,
             created_at TEXT NOT NULL
         )
         """
     )
+    job_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+    }
+    if "skill_requirements" not in job_columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN skill_requirements TEXT")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS applicants (
@@ -88,6 +96,17 @@ def get_applicant_history():
     return applicants
 
 
+def get_job_skills(job):
+    skills = json.loads(job["skill_requirements"] or "[]") if job["skill_requirements"] else []
+    if skills:
+        return skills
+    return [
+        {"name": job[f"skill{i}"], "priority": job[f"priority{i}"]}
+        for i in range(1, 6)
+        if job[f"skill{i}"]
+    ]
+
+
 init_db()
 
 
@@ -106,7 +125,7 @@ def home():
 
 @app.route("/company")
 def company():
-    return render_template("company.html", job=None, jobs=get_job_history())
+    return render_template("company.html", job=None, skills=[], jobs=get_job_history())
 
 
 # ----------------------------
@@ -133,7 +152,8 @@ def edit_job(job_id):
     conn.close()
     if job is None:
         return redirect(url_for("company_history"))
-    return render_template("company.html", job=job, jobs=get_job_history())
+    skills = get_job_skills(job)
+    return render_template("company.html", job=job, skills=skills, jobs=get_job_history())
 
 
 @app.route("/delete_job/<int:job_id>")
@@ -151,7 +171,23 @@ def delete_job(job_id):
 
 @app.route("/applicant")
 def applicant():
-    return render_template("applicant.html", applicant=None, applicants=get_applicant_history())
+    jobs = [
+        {
+            "id": job["id"],
+            "company_name": job["company_name"],
+            "job_title": job["job_title"],
+            "job_description": job["job_description"],
+            "minimum_score": job["minimum_score"],
+            "skills": get_job_skills(job),
+        }
+        for job in get_job_history()
+    ]
+    return render_template(
+        "applicant.html",
+        applicant=None,
+        applicants=get_applicant_history(),
+        jobs=jobs,
+    )
 
 
 @app.route("/applicant_history")
@@ -269,16 +305,23 @@ def submit_job():
     company_name = request.form["company_name"]
     job_title = request.form["job_title"]
     job_description = request.form["job_description"]
-    skill1 = request.form.get("skill1")
-    priority1 = request.form.get("priority1") or None
-    skill2 = request.form.get("skill2")
-    priority2 = request.form.get("priority2") or None
-    skill3 = request.form.get("skill3")
-    priority3 = request.form.get("priority3") or None
-    skill4 = request.form.get("skill4")
-    priority4 = request.form.get("priority4") or None
-    skill5 = request.form.get("skill5")
-    priority5 = request.form.get("priority5") or None
+    skills = [
+        {"name": name.strip(), "priority": int(priority)}
+        for name, priority in zip(
+            request.form.getlist("skill"),
+            request.form.getlist("priority")
+        )
+        if name.strip() and priority
+    ]
+    if not skills:
+        return "At least one required skill is needed.", 400
+
+    legacy_skills = skills[:5] + [{"name": None, "priority": None}] * 5
+    skill1, priority1 = legacy_skills[0]["name"], legacy_skills[0]["priority"]
+    skill2, priority2 = legacy_skills[1]["name"], legacy_skills[1]["priority"]
+    skill3, priority3 = legacy_skills[2]["name"], legacy_skills[2]["priority"]
+    skill4, priority4 = legacy_skills[3]["name"], legacy_skills[3]["priority"]
+    skill5, priority5 = legacy_skills[4]["name"], legacy_skills[4]["priority"]
     minimum_score = int(request.form["minimum_score"])
     created_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -300,6 +343,7 @@ def submit_job():
                 priority4 = ?,
                 skill5 = ?,
                 priority5 = ?,
+                skill_requirements = ?,
                 minimum_score = ?
             WHERE id = ?
             """,
@@ -317,6 +361,7 @@ def submit_job():
                 priority4,
                 skill5,
                 priority5,
+                json.dumps(skills),
                 minimum_score,
                 job_id,
             ),
@@ -339,9 +384,10 @@ def submit_job():
                 priority4,
                 skill5,
                 priority5,
+                skill_requirements,
                 minimum_score,
                 created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 company_name,
@@ -357,6 +403,7 @@ def submit_job():
                 priority4,
                 skill5,
                 priority5,
+                json.dumps(skills),
                 minimum_score,
                 created_at,
             ),
@@ -368,6 +415,10 @@ def submit_job():
     company_data["company"] = company_name
     company_data["job"] = job_title
     company_data["description"] = job_description
+    company_data["minimum_score"] = minimum_score
+    company_data["skills"] = {
+        item["name"]: item["priority"] for item in skills
+    }
 
     return render_template(
         "success.html",
@@ -408,6 +459,19 @@ def upload_resume():
     phone = request.form["phone"]
     qualification = request.form["qualification"]
     experience = int(request.form["experience"])
+    job_id = request.form.get("job_id")
+
+    if not job_id:
+        return "Please select a company and job before uploading a resume.", 400
+
+    conn = get_db_connection()
+    selected_job = conn.execute(
+        "SELECT * FROM jobs WHERE id = ?",
+        (job_id,)
+    ).fetchone()
+    conn.close()
+    if selected_job is None:
+        return "The selected job is no longer available.", 404
 
     resume = request.files["resume"]
 
@@ -419,29 +483,17 @@ def upload_resume():
     resume.save(filepath)
 
     resume_text = extract_text(filepath)
-    job_text = company_data.get("description", "")
-
-    vectorizer = TfidfVectorizer()
-
-    vectors = vectorizer.fit_transform([
+    job_text = selected_job["job_description"]
+    minimum_score = selected_job["minimum_score"]
+    selected_skills = {
+        skill["name"]: skill["priority"] for skill in get_job_skills(selected_job)
+    }
+    result = predict_resume(
+        job_text,
         resume_text,
-        job_text
-    ])
-
-    similarity = cosine_similarity(
-        vectors[0:1],
-        vectors[1:2]
-    )[0][0]
-
-    similarity_percentage = round(
-        similarity * 100,
-        2
+        selected_skills,
+        minimum_score=minimum_score,
     )
-
-    ats_score = similarity_percentage
-    skill_score = similarity_percentage
-    minimum_score = int(company_data.get("minimum_score", 0)) if company_data.get("minimum_score") else 0
-    prediction = "Suitable" if similarity_percentage >= minimum_score else "Not Suitable"
 
     conn = get_db_connection()
     conn.execute(
@@ -469,12 +521,12 @@ def upload_resume():
             qualification,
             experience,
             resume.filename,
-            similarity_percentage,
-            skill_score,
-            ats_score,
-            prediction,
-            company_data.get("company", ""),
-            company_data.get("job", ""),
+            result["similarity"],
+            result["skill_score"],
+            result["ats_score"],
+            result["prediction"],
+            selected_job["company_name"],
+            selected_job["job_title"],
             datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         ),
     )
@@ -484,12 +536,12 @@ def upload_resume():
     return render_template(
         "result.html",
         name=name,
-        similarity=similarity_percentage,
-        skill_score=skill_score,
-        ats_score=ats_score,
-        prediction=prediction,
-        matched=[],
-        missing=[]
+        similarity=result["similarity"],
+        skill_score=result["skill_score"],
+        ats_score=result["ats_score"],
+        prediction=result["prediction"],
+        matched=result["matched"],
+        missing=result["missing"]
     )
 
 

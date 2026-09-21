@@ -63,24 +63,24 @@
 
         <h3>Required Skills & Priority</h3>
 
-        <div class="skills">
-
-            <input type="text" name="skill1" placeholder="Skill 1" value="{{ job.skill1 if job else '' }}">
-            <input type="number" name="priority1" placeholder="Priority" value="{{ job.priority1 if job else '' }}">
-
-            <input type="text" name="skill2" placeholder="Skill 2" value="{{ job.skill2 if job else '' }}">
-            <input type="number" name="priority2" placeholder="Priority" value="{{ job.priority2 if job else '' }}">
-
-            <input type="text" name="skill3" placeholder="Skill 3" value="{{ job.skill3 if job else '' }}">
-            <input type="number" name="priority3" placeholder="Priority" value="{{ job.priority3 if job else '' }}">
-
-            <input type="text" name="skill4" placeholder="Skill 4" value="{{ job.skill4 if job else '' }}">
-            <input type="number" name="priority4" placeholder="Priority" value="{{ job.priority4 if job else '' }}">
-
-            <input type="text" name="skill5" placeholder="Skill 5" value="{{ job.skill5 if job else '' }}">
-            <input type="number" name="priority5" placeholder="Priority" value="{{ job.priority5 if job else '' }}">
-
+        <div class="skills" id="skillsContainer">
+            {% for skill in skills %}
+            <div class="skill-row">
+                <input type="text" name="skill" placeholder="Skill {{ loop.index }}" value="{{ skill.name }}" required>
+                <input type="number" name="priority" placeholder="Priority" min="1" value="{{ skill.priority }}" required>
+                {% if not loop.first %}
+                <button type="button" class="remove-skill" aria-label="Remove skill">Remove</button>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="skill-row">
+                <input type="text" name="skill" placeholder="Skill 1" required>
+                <input type="number" name="priority" placeholder="Priority" min="1" required>
+            </div>
+            {% endfor %}
         </div>
+
+        <button type="button" id="addSkill" class="add-skill">Add Skill</button>
 
         <label>Minimum ATS Score (%)</label>
 
@@ -155,6 +155,28 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+<script>
+    const skillsContainer = document.getElementById("skillsContainer");
+    const addSkillButton = document.getElementById("addSkill");
+
+    addSkillButton.addEventListener("click", () => {
+        const row = document.createElement("div");
+        row.className = "skill-row";
+        const skillNumber = skillsContainer.children.length + 1;
+        row.innerHTML = `
+            <input type="text" name="skill" placeholder="Skill ${skillNumber}" required>
+            <input type="number" name="priority" placeholder="Priority" min="1" required>
+            <button type="button" class="remove-skill" aria-label="Remove skill">Remove</button>
+        `;
+        skillsContainer.appendChild(row);
+    });
+
+    skillsContainer.addEventListener("click", (event) => {
+        if (event.target.classList.contains("remove-skill")) {
+            event.target.closest(".skill-row").remove();
+        }
+    });
+</script>
 
 </body>
 
