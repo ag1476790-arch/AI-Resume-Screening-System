@@ -3,6 +3,9 @@ import os
 import sqlite3
 import json
 import pdfplumber
+import fitz
+import pytesseract
+from PIL import Image
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -19,6 +22,8 @@ DB_PATH = os.environ.get("DB_PATH", "jobs.db")
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 MAX_RESUME_SIZE = 5 * 1024 * 1024
 app.config["MAX_CONTENT_LENGTH"] = MAX_RESUME_SIZE
+if os.environ.get("TESSERACT_CMD"):
+    pytesseract.pytesseract.tesseract_cmd = os.environ["TESSERACT_CMD"]
 
 
 def get_db_connection():
@@ -517,20 +522,27 @@ def submit_job():
 # ----------------------------
 
 def extract_text(pdf_path):
-
-    text = ""
+    text_parts = []
 
     with pdfplumber.open(pdf_path) as pdf:
-
         for page in pdf.pages:
-
             page_text = page.extract_text()
-
             if page_text:
+                text_parts.append(page_text)
 
-                text += page_text + " "
+    extracted_text = "\n".join(text_parts).strip()
+    if extracted_text:
+        return extracted_text.lower()
 
-    return text.lower()
+    # Scanned resumes contain page images instead of an embedded text layer.
+    ocr_parts = []
+    with fitz.open(pdf_path) as pdf:
+        for page in pdf:
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
+            ocr_parts.append(pytesseract.image_to_string(image))
+
+    return "\n".join(ocr_parts).lower()
 
 
 def score_saved_applicant(applicant, job):
