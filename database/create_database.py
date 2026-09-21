@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS applicants(
 
     applied_job TEXT,
 
+    applied_job_id INTEGER,
+
     applied_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
 )

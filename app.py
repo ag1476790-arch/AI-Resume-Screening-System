@@ -70,10 +70,16 @@ def init_db():
             prediction TEXT,
             applied_company TEXT,
             applied_job TEXT,
+            applied_job_id INTEGER,
             created_at TEXT NOT NULL
         )
         """
     )
+    applicant_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(applicants)").fetchall()
+    }
+    if "applied_job_id" not in applicant_columns:
+        conn.execute("ALTER TABLE applicants ADD COLUMN applied_job_id INTEGER")
     conn.commit()
     conn.close()
 
@@ -104,6 +110,20 @@ def get_job_skills(job):
         {"name": job[f"skill{i}"], "priority": job[f"priority{i}"]}
         for i in range(1, 6)
         if job[f"skill{i}"]
+    ]
+
+
+def get_applicant_jobs():
+    return [
+        {
+            "id": job["id"],
+            "company_name": job["company_name"],
+            "job_title": job["job_title"],
+            "job_description": job["job_description"],
+            "minimum_score": job["minimum_score"],
+            "skills": get_job_skills(job),
+        }
+        for job in get_job_history()
     ]
 
 
@@ -142,6 +162,88 @@ def company_history():
     return render_template("company_history.html", jobs=jobs)
 
 
+@app.route("/company_portal")
+def company_portal():
+    jobs = get_job_history()
+    companies = sorted({job["company_name"] for job in jobs})
+    company_name = request.args.get("company_name", "")
+    selected_job_id = request.args.get("job_id", type=int)
+    view = request.args.get("view", "requirements")
+    company_jobs = [job for job in jobs if job["company_name"] == company_name]
+    selected_job = next(
+        (job for job in company_jobs if job["id"] == selected_job_id),
+        company_jobs[0] if company_jobs else None,
+    )
+    applicants = []
+    if selected_job and view == "applicants":
+        conn = get_db_connection()
+        applicants = conn.execute(
+            """
+            SELECT * FROM applicants
+            WHERE applied_company = ?
+              AND (applied_job_id = ? OR (applied_job_id IS NULL AND applied_job = ?))
+            ORDER BY ats_score DESC, datetime(created_at) DESC
+            """,
+            (company_name, selected_job["id"], selected_job["job_title"]),
+        ).fetchall()
+        conn.close()
+
+    return render_template(
+        "company_portal.html",
+        companies=companies,
+        company_name=company_name,
+        company_jobs=company_jobs,
+        selected_job=selected_job,
+        selected_skills=get_job_skills(selected_job) if selected_job else [],
+        applicants=applicants,
+        view=view,
+    )
+
+
+@app.route("/company_portal/compare", methods=["POST"])
+def company_portal_compare():
+    company_name = request.form["company_name"]
+    job_id = int(request.form["job_id"])
+    applicant_ids = [int(value) for value in request.form.getlist("applicant_id")]
+    jobs = get_job_history()
+    company_jobs = [job for job in jobs if job["company_name"] == company_name]
+    selected_job = next((job for job in company_jobs if job["id"] == job_id), None)
+    if selected_job is None:
+        return redirect(url_for("company_portal"))
+
+    conn = get_db_connection()
+    applicants = conn.execute(
+                """
+                SELECT * FROM applicants
+                WHERE applied_company = ?
+                    AND (applied_job_id = ? OR (applied_job_id IS NULL AND applied_job = ?))
+                    AND id IN ({})
+                ORDER BY ats_score DESC
+                """.format(
+            ",".join("?" for _ in applicant_ids) or "NULL"
+        ),
+                [company_name, selected_job["id"], selected_job["job_title"], *applicant_ids],
+    ).fetchall()
+    conn.close()
+    comparison_results = []
+    for applicant in applicants:
+        result = score_saved_applicant(applicant, selected_job)
+        comparison_results.append({"applicant": applicant, "result": result})
+
+    companies = sorted({job["company_name"] for job in jobs})
+    return render_template(
+        "company_portal.html",
+        companies=companies,
+        company_name=company_name,
+        company_jobs=company_jobs,
+        selected_job=selected_job,
+        selected_skills=get_job_skills(selected_job),
+        applicants=applicants,
+        comparison_results=comparison_results,
+        view="applicants",
+    )
+
+
 @app.route("/edit_job/<int:job_id>")
 def edit_job(job_id):
     conn = get_db_connection()
@@ -171,22 +273,11 @@ def delete_job(job_id):
 
 @app.route("/applicant")
 def applicant():
-    jobs = [
-        {
-            "id": job["id"],
-            "company_name": job["company_name"],
-            "job_title": job["job_title"],
-            "job_description": job["job_description"],
-            "minimum_score": job["minimum_score"],
-            "skills": get_job_skills(job),
-        }
-        for job in get_job_history()
-    ]
     return render_template(
         "applicant.html",
         applicant=None,
         applicants=get_applicant_history(),
-        jobs=jobs,
+        jobs=get_applicant_jobs(),
     )
 
 
@@ -281,15 +372,7 @@ def delete_applicant(applicant_id):
 
 @app.route("/edit_applicant/<int:applicant_id>")
 def edit_applicant(applicant_id):
-    conn = get_db_connection()
-    applicant = conn.execute(
-        "SELECT * FROM applicants WHERE id = ?",
-        (applicant_id,)
-    ).fetchone()
-    conn.close()
-    if applicant is None:
-        return redirect(url_for("applicant"))
-    return render_template("applicant.html", applicant=applicant, applicants=get_applicant_history())
+    return redirect(url_for("view_result", applicant_id=applicant_id))
 
 
 # ----------------------------
@@ -447,6 +530,23 @@ def extract_text(pdf_path):
     return text.lower()
 
 
+def score_saved_applicant(applicant, job):
+    resume_path = os.path.join(
+        app.config["UPLOAD_FOLDER"],
+        applicant["resume_filename"],
+    )
+    resume_text = extract_text(resume_path)
+    skills = {
+        skill["name"]: skill["priority"] for skill in get_job_skills(job)
+    }
+    return predict_resume(
+        job["job_description"],
+        resume_text,
+        skills,
+        minimum_score=job["minimum_score"],
+    )
+
+
 # ----------------------------
 # UPLOAD RESUME
 # ----------------------------
@@ -511,8 +611,9 @@ def upload_resume():
             prediction,
             applied_company,
             applied_job,
+            applied_job_id,
             created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             name,
@@ -527,6 +628,7 @@ def upload_resume():
             result["prediction"],
             selected_job["company_name"],
             selected_job["job_title"],
+            selected_job["id"],
             datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         ),
     )

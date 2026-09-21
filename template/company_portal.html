@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Company Portal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/company_portal.css') }}">
+</head>
+<body>
+<header>
+    <h2>Company Dashboard</h2>
+    <a href="/">Home</a>
+</header>
+
+<main class="container">
+    <h1>Company Portal</h1>
+
+    <form class="selector" method="GET" action="/company_portal">
+        <label for="company_name">Company</label>
+        <select id="company_name" name="company_name" required onchange="this.form.submit()">
+            <option value="">Select company</option>
+            {% for company in companies %}
+            <option value="{{ company }}" {% if company == company_name %}selected{% endif %}>{{ company }}</option>
+            {% endfor %}
+        </select>
+        {% if company_name %}
+        <label for="job_id">Position</label>
+        <select id="job_id" name="job_id" onchange="this.form.submit()">
+            {% for job in company_jobs %}
+            <option value="{{ job.id }}" {% if selected_job and job.id == selected_job.id %}selected{% endif %}>{{ job.job_title }}</option>
+            {% endfor %}
+        </select>
+        <input type="hidden" name="view" value="{{ view }}">
+        {% endif %}
+    </form>
+
+    {% if selected_job %}
+    <nav class="tabs" aria-label="Company portal sections">
+        <a class="tab {% if view == 'requirements' %}active{% endif %}" href="{{ url_for('company_portal', company_name=company_name, job_id=selected_job.id, view='requirements') }}">Requirements</a>
+        <a class="tab {% if view == 'applicants' %}active{% endif %}" href="{{ url_for('company_portal', company_name=company_name, job_id=selected_job.id, view='applicants') }}">Applicant List</a>
+    </nav>
+
+    {% if view == 'requirements' %}
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">{{ selected_job.company_name }}</p>
+                <h2>{{ selected_job.job_title }}</h2>
+            </div>
+            <div class="actions">
+                <a class="button edit" href="{{ url_for('edit_job', job_id=selected_job.id) }}">Edit</a>
+                <a class="button delete" href="{{ url_for('delete_job', job_id=selected_job.id) }}">Delete</a>
+            </div>
+        </div>
+        <h3>Job Description</h3>
+        <p class="description">{{ selected_job.job_description }}</p>
+        <h3>Required Skills</h3>
+        <ul class="skills">
+            {% for skill in selected_skills %}
+            <li><span>{{ skill.name }}</span><strong>Priority {{ skill.priority }}</strong></li>
+            {% endfor %}
+        </ul>
+        <p class="threshold">Minimum ATS score: <strong>{{ selected_job.minimum_score }}%</strong></p>
+    </section>
+    {% else %}
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">{{ selected_job.company_name }}</p>
+                <h2>Applicants for {{ selected_job.job_title }}</h2>
+            </div>
+            <span class="count">{{ applicants|length }} applicant(s)</span>
+        </div>
+        {% if applicants %}
+        <form method="POST" action="{{ url_for('company_portal_compare') }}">
+            <input type="hidden" name="company_name" value="{{ company_name }}">
+            <input type="hidden" name="job_id" value="{{ selected_job.id }}">
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Select</th><th>Candidate</th><th>Resume</th><th>ATS Score</th><th>Status</th><th>Applied</th></tr></thead>
+                    <tbody>
+                    {% for applicant in applicants %}
+                    <tr>
+                        <td><input type="checkbox" name="applicant_id" value="{{ applicant.id }}"></td>
+                        <td><strong>{{ applicant.applicant_name }}</strong><br><small>{{ applicant.email }}</small></td>
+                        <td>{{ applicant.applied_job }}</td>
+                        <td>{{ applicant.ats_score }}%</td>
+                        <td><span class="status {{ 'passed' if applicant.prediction == 'Suitable' else 'failed' }}">{{ 'Shortlisted' if applicant.prediction == 'Suitable' else 'Failed' }}</span></td>
+                        <td>{{ applicant.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <button class="compare-button" type="submit">Compare Selected Resumes</button>
+        </form>
+        {% else %}
+        <p class="empty">No applicants have applied for this position yet.</p>
+        {% endif %}
+    </section>
+
+    {% if comparison_results %}
+    <section class="panel">
+        <h2>Comparison Against Current Requirements</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Candidate</th><th>Similarity</th><th>Skill Score</th><th>ATS Score</th><th>Result</th></tr></thead>
+                <tbody>
+                {% for item in comparison_results %}
+                <tr>
+                    <td>{{ item.applicant.applicant_name }}</td>
+                    <td>{{ item.result.similarity }}%</td>
+                    <td>{{ item.result.skill_score }}%</td>
+                    <td>{{ item.result.ats_score }}%</td>
+                    <td><span class="status {{ 'passed' if item.result.prediction == 'Suitable' else 'failed' }}">{{ 'Shortlisted' if item.result.prediction == 'Suitable' else 'Failed' }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+    {% endif %}
+    {% elif not companies %}
+    <p class="empty">No company jobs have been saved yet.</p>
+    {% endif %}
+
+    <a class="back-link" href="/company">Create or manage jobs</a>
+</main>
+</body>
+</html>
