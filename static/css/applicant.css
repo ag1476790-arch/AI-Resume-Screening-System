@@ -93,6 +93,12 @@ input[type=file]{
 
 }
 
+.upload-hint{
+    margin:8px 0 0;
+    color:#64748b;
+    font-size:13px;
+}
+
 select{
     width:100%;
     padding:12px;

@@ -4,6 +4,7 @@ import sqlite3
 import json
 import pdfplumber
 from datetime import datetime
+from werkzeug.utils import secure_filename
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from models.predictor import predict_resume
@@ -16,6 +17,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 DB_PATH = os.environ.get("DB_PATH", "jobs.db")
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+MAX_RESUME_SIZE = 5 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = MAX_RESUME_SIZE
 
 
 def get_db_connection():
@@ -574,10 +577,25 @@ def upload_resume():
         return "The selected job is no longer available.", 404
 
     resume = request.files["resume"]
+    if not resume or not resume.filename:
+        return "Please select a PDF resume.", 400
+
+    if not resume.filename.lower().endswith(".pdf"):
+        return "Only PDF resumes are accepted.", 400
+
+    resume.seek(0, os.SEEK_END)
+    resume_size = resume.tell()
+    resume.seek(0)
+    if resume_size > MAX_RESUME_SIZE:
+        return "Resume file must be 5 MB or smaller.", 413
+
+    safe_filename = secure_filename(resume.filename)
+    if not safe_filename:
+        return "Invalid resume filename.", 400
 
     filepath = os.path.join(
         app.config["UPLOAD_FOLDER"],
-        resume.filename
+        safe_filename
     )
 
     resume.save(filepath)
@@ -621,7 +639,7 @@ def upload_resume():
             phone,
             qualification,
             experience,
-            resume.filename,
+            safe_filename,
             result["similarity"],
             result["skill_score"],
             result["ats_score"],

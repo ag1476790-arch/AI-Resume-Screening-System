@@ -106,8 +106,11 @@
             type="file"
             name="resume"
             accept=".pdf"
+            data-max-size="5242880"
             required
         >
+
+        <p class="upload-hint">PDF only, maximum size 5 MB.</p>
 
         <button type="submit">
 
@@ -200,6 +203,16 @@
             skillsList.appendChild(item);
         });
         requirements.hidden = false;
+    });
+</script>
+<script>
+    document.querySelector('input[name="resume"]').addEventListener("change", function () {
+        const maxSize = Number(this.dataset.maxSize);
+        if (this.files[0] && this.files[0].size > maxSize) {
+            this.setCustomValidity("Resume must be 5 MB or smaller.");
+        } else {
+            this.setCustomValidity("");
+        }
     });
 </script>
 
