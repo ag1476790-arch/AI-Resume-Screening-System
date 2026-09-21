@@ -14,7 +14,7 @@ def predict_resume(job_description, resume_text, company_skills, minimum_score=7
     similarity = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
     similarity_percentage = round(similarity * 100, 2)
 
-    applicant_skills = extract_skills(resume_text)
+    applicant_skills = extract_skills(resume_text, company_skills.keys())
     skill_score, matched, missing = calculate_skill_score(
         company_skills,
         applicant_skills
