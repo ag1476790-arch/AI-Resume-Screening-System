@@ -1,5 +1,7 @@
 import re
 
+from models.text_processor import preprocess_text
+
 
 KNOWN_SKILLS = [
 
@@ -45,6 +47,10 @@ def _skill_pattern(skill):
 
 
 def extract_skills(text, required_skills=None):
+    cleaned_text = preprocess_text(text or "")
+    if not cleaned_text:
+        return []
+
     skills_to_check = required_skills or KNOWN_SKILLS
     found_skills = []
 
@@ -52,8 +58,12 @@ def extract_skills(text, required_skills=None):
         if not skill:
             continue
 
-        pattern = _skill_pattern(skill)
-        if pattern and re.search(pattern, text or "", flags=re.IGNORECASE):
+        processed_skill = preprocess_text(skill)
+        if not processed_skill:
+            continue
+
+        pattern = _skill_pattern(processed_skill)
+        if pattern and re.search(pattern, cleaned_text, flags=re.IGNORECASE):
             found_skills.append(skill)
 
     return found_skills

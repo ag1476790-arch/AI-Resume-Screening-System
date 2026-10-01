@@ -60,6 +60,14 @@
             <li><span>{{ skill.name }}</span><strong>Priority {{ skill.priority }}</strong></li>
             {% endfor %}
         </ul>
+        {% if job_keywords %}
+        <h3>Normalized Keywords</h3>
+        <div class="keyword-cloud">
+            {% for keyword in job_keywords %}
+            <span class="keyword-tag">{{ keyword }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
         <p class="threshold">Minimum ATS score: <strong>{{ selected_job.minimum_score }}%</strong></p>
     </section>
     {% else %}

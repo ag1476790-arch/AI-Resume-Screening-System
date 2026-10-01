@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, redirect, url_for
 import os
 import sqlite3
 import json
+import tempfile
+import uuid
 import pdfplumber
 import fitz
 import pytesseract
@@ -11,6 +13,7 @@ from werkzeug.utils import secure_filename
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from models.predictor import predict_resume
+from models.text_processor import preprocess_text, extract_keywords
 
 app = Flask(__name__, template_folder="template", static_folder="static")
 
@@ -196,6 +199,8 @@ def company_portal():
         ).fetchall()
         conn.close()
 
+    job_keywords = extract_keywords(selected_job["job_description"]) if selected_job else []
+
     return render_template(
         "company_portal.html",
         companies=companies,
@@ -204,6 +209,7 @@ def company_portal():
         selected_job=selected_job,
         selected_skills=get_job_skills(selected_job) if selected_job else [],
         applicants=applicants,
+        job_keywords=job_keywords,
         view=view,
     )
 
@@ -239,6 +245,7 @@ def company_portal_compare():
         comparison_results.append({"applicant": applicant, "result": result})
 
     companies = sorted({job["company_name"] for job in jobs})
+    job_keywords = extract_keywords(selected_job["job_description"]) if selected_job else []
     return render_template(
         "company_portal.html",
         companies=companies,
@@ -248,6 +255,7 @@ def company_portal_compare():
         selected_skills=get_job_skills(selected_job),
         applicants=applicants,
         comparison_results=comparison_results,
+        job_keywords=job_keywords,
         view="applicants",
     )
 
@@ -324,8 +332,11 @@ def compare():
             )
             job_text = selected_job["job_description"]
 
+            resume_clean = preprocess_text(resume_text)
+            job_clean = preprocess_text(job_text)
+
             vectorizer = TfidfVectorizer()
-            vectors = vectorizer.fit_transform([resume_text, job_text])
+            vectors = vectorizer.fit_transform([resume_clean, job_clean])
             similarity = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
             similarity_percentage = round(similarity * 100, 2)
 
@@ -395,7 +406,19 @@ def submit_job():
     job_id = request.form.get("job_id")
     company_name = request.form["company_name"]
     job_title = request.form["job_title"]
-    job_description = request.form["job_description"]
+    job_description = (request.form.get("job_description") or "").strip()
+    uploaded_job_file = request.files.get("job_description_file")
+    if uploaded_job_file and uploaded_job_file.filename:
+        try:
+            pdf_text = resolve_pdf_text(uploaded_job_file)
+        except ValueError as exc:
+            return str(exc), 400
+        if pdf_text:
+            job_description = "\n".join(part for part in [job_description, pdf_text] if part).strip()
+
+    if not job_description:
+        return "Please enter a job description or upload a PDF description.", 400
+
     skills = [
         {"name": name.strip(), "priority": int(priority)}
         for name, priority in zip(
@@ -518,29 +541,71 @@ def submit_job():
 
 
 # ----------------------------
-# EXTRACT PDF TEXT
+# TEXT PREPROCESSING & PDF EXTRACTION
 # ----------------------------
 
+def resolve_pdf_text(uploaded_file):
+    if not uploaded_file or not getattr(uploaded_file, "filename", None):
+        return ""
+
+    if not uploaded_file.filename.lower().endswith(".pdf"):
+        raise ValueError("Only PDF files are supported.")
+
+    temp_file = os.path.join(
+        tempfile.gettempdir(),
+        f"job_{uuid.uuid4().hex}.pdf",
+    )
+    uploaded_file.save(temp_file)
+    try:
+        return extract_text(temp_file)
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
+
 def extract_text(pdf_path):
+    if not pdf_path or not os.path.exists(pdf_path):
+        return ""
+
     text_parts = []
 
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_parts.append(page_text)
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text(layout=False) or page.extract_text(x_tolerance=1, y_tolerance=1)
+                if page_text and page_text.strip():
+                    text_parts.append(page_text)
+    except Exception as e:
+        print(f"pdfplumber extraction warning: {e}")
 
     extracted_text = "\n".join(text_parts).strip()
     if extracted_text:
         return extracted_text.lower()
 
-    # Scanned resumes contain page images instead of an embedded text layer.
+    try:
+        with fitz.open(pdf_path) as doc:
+            for page in doc:
+                page_text = page.get_text("text")
+                if page_text and page_text.strip():
+                    text_parts.append(page_text)
+    except Exception as e:
+        print(f"PyMuPDF text extraction warning: {e}")
+
+    extracted_text = "\n".join(text_parts).strip()
+    if extracted_text:
+        return extracted_text.lower()
+
     ocr_parts = []
-    with fitz.open(pdf_path) as pdf:
-        for page in pdf:
-            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-            image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
-            ocr_parts.append(pytesseract.image_to_string(image))
+    try:
+        with fitz.open(pdf_path) as pdf:
+            for page in pdf:
+                pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
+                ocr_text = pytesseract.image_to_string(image)
+                if ocr_text and ocr_text.strip():
+                    ocr_parts.append(ocr_text)
+    except Exception as e:
+        print(f"OCR extraction warning (Tesseract might not be installed): {e}")
 
     return "\n".join(ocr_parts).lower()
 

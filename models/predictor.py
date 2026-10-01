@@ -3,18 +3,22 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from models.skill_extractor import extract_skills
 from models.score_calculator import calculate_skill_score
+from models.text_processor import preprocess_text
 
 
 def predict_resume(job_description, resume_text, company_skills, minimum_score=75):
+    job_text = preprocess_text(job_description)
+    resume_clean = preprocess_text(resume_text)
+
     vectorizer = TfidfVectorizer()
     vectors = vectorizer.fit_transform([
-        job_description.lower(),
-        resume_text.lower()
+        job_text,
+        resume_clean
     ])
     similarity = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
     similarity_percentage = round(similarity * 100, 2)
 
-    applicant_skills = extract_skills(resume_text, company_skills.keys())
+    applicant_skills = extract_skills(resume_clean, company_skills.keys())
     skill_score, matched, missing = calculate_skill_score(
         company_skills,
         applicant_skills

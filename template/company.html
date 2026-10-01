@@ -52,14 +52,16 @@
             required
         >
 
-        <label>Job Description</label>
+        <label>Job Description (Text)</label>
 
         <textarea
             name="job_description"
             rows="6"
             placeholder="Describe the Job"
-            required
         >{{ job.job_description if job else '' }}</textarea>
+
+        <label>Or upload job description PDF</label>
+        <input type="file" name="job_description_file" accept=".pdf">
 
         <h3>Required Skills & Priority</h3>
 
