@@ -730,6 +730,16 @@ def upload_resume():
     conn.commit()
     conn.close()
 
+    if result["prediction"] == "Suitable":
+        return redirect(
+            url_for(
+                "company_portal",
+                company_name=selected_job["company_name"],
+                job_id=selected_job["id"],
+                view="applicants",
+            )
+        )
+
     return render_template(
         "result.html",
         name=name,
