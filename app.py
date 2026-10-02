@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, jsonify, render_template, request, redirect, url_for
 import os
 import sqlite3
 import json
@@ -414,20 +414,32 @@ def submit_job():
             pdf_text = resolve_pdf_text(uploaded_job_file)
         except ValueError as exc:
             return str(exc), 400
+        except RuntimeError as exc:
+            return str(exc), 503
         if pdf_text:
             job_description = "\n".join(part for part in [job_description, pdf_text] if part).strip()
 
     if not job_description:
         return "Please enter a job description or upload a PDF description.", 400
 
-    skills = [
-        {"name": name.strip(), "priority": int(priority)}
-        for name, priority in zip(
-            request.form.getlist("skill"),
-            request.form.getlist("priority")
-        )
-        if name.strip() and priority
-    ]
+    skills = []
+    for name, raw_priority in zip(
+        request.form.getlist("skill"),
+        request.form.getlist("priority"),
+    ):
+        name = name.strip()
+        raw_priority = raw_priority.strip()
+        if not name and not raw_priority:
+            continue
+        if not name or not raw_priority:
+            return "Enter a priority for every required skill.", 400
+        try:
+            priority = int(raw_priority)
+        except ValueError:
+            return "Skill priorities must be whole numbers greater than zero.", 400
+        if priority < 1:
+            return "Skill priorities must be whole numbers greater than zero.", 400
+        skills.append({"name": name, "priority": priority})
     if not skills:
         return "At least one required skill is needed.", 400
 
@@ -594,6 +606,33 @@ def infer_job_skills(job_text):
     return {keyword: 4 for keyword in keywords}
 
 
+@app.route("/extract_job_skills", methods=["POST"])
+def extract_job_skills():
+    job_text = (request.form.get("job_description") or "").strip()
+    uploaded_file = request.files.get("job_description_file")
+    if uploaded_file and uploaded_file.filename:
+        try:
+            pdf_text = extract_uploaded_pdf_text(uploaded_file)
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        except RuntimeError as exc:
+            return jsonify(error=str(exc)), 503
+        job_text = "\n".join(part for part in (job_text, pdf_text) if part).strip()
+
+    if not job_text:
+        return jsonify(error="Enter a job description or select a PDF first."), 400
+
+    return jsonify(skills=extract_skills(job_text))
+
+
+def is_tesseract_available():
+    try:
+        pytesseract.get_tesseract_version()
+        return True
+    except pytesseract.pytesseract.TesseractNotFoundError:
+        return False
+
+
 def extract_text(pdf_path):
     if not pdf_path or not os.path.exists(pdf_path):
         return ""
@@ -635,6 +674,12 @@ def extract_text(pdf_path):
                 ocr_text = pytesseract.image_to_string(image)
                 if ocr_text and ocr_text.strip():
                     ocr_parts.append(ocr_text)
+    except pytesseract.pytesseract.TesseractNotFoundError as e:
+        raise RuntimeError(
+            "This PDF appears to be scanned, but Tesseract OCR is not installed. "
+            "Install Tesseract OCR and restart the app. On Windows, set TESSERACT_CMD "
+            "to the path of tesseract.exe if it is not on PATH."
+        ) from e
     except Exception as e:
         print(f"OCR extraction warning (Tesseract might not be installed): {e}")
 
@@ -642,6 +687,7 @@ def extract_text(pdf_path):
 
 
 def score_saved_applicant(applicant, job):
+
     resume_path = os.path.join(
         app.config["UPLOAD_FOLDER"],
         applicant["resume_filename"],
@@ -662,8 +708,18 @@ def score_saved_applicant(applicant, job):
 # DIRECT PDF COMPARISON
 # ----------------------------
 
-@app.route("/compare_pdfs", methods=["POST"])
+@app.route("/compare_pdfs", methods=["GET", "POST"])
 def compare_pdfs():
+    if request.method == "GET":
+        return render_template("pdf_compare.html", minimum_score=50)
+
+    try:
+        minimum_score = int(request.form.get("minimum_score", 50))
+    except (TypeError, ValueError):
+        return "Minimum ATS score must be a whole number from 0 to 100.", 400
+    if not 0 <= minimum_score <= 100:
+        return "Minimum ATS score must be between 0 and 100.", 400
+
     resume_file = request.files.get("resume_pdf")
     job_file = request.files.get("job_description_pdf")
 
@@ -677,8 +733,17 @@ def compare_pdfs():
         job_text = extract_uploaded_pdf_text(job_file)
     except ValueError as exc:
         return str(exc), 400
+    except RuntimeError as exc:
+        return str(exc), 503
 
     if not resume_text.strip() or not job_text.strip():
+        if not is_tesseract_available():
+            return (
+                "This PDF appears to be scanned, but Tesseract OCR is not installed. "
+                "Install Tesseract OCR and restart the app. On Windows, set TESSERACT_CMD "
+                "to the path of tesseract.exe if it is not on PATH.",
+                503,
+            )
         return "Both uploaded PDFs must contain readable text.", 400
 
     required_skills = infer_job_skills(job_text)
@@ -686,7 +751,7 @@ def compare_pdfs():
         job_text,
         resume_text,
         required_skills,
-        minimum_score=75,
+        minimum_score=minimum_score,
     )
 
     return render_template(
@@ -698,6 +763,7 @@ def compare_pdfs():
         prediction=result["prediction"],
         matched=result["matched"],
         missing=result["missing"],
+        minimum_score=minimum_score,
     )
 
 
@@ -751,7 +817,23 @@ def upload_resume():
 
     resume.save(filepath)
 
-    resume_text = extract_text(filepath)
+    try:
+        resume_text = extract_text(filepath)
+    except RuntimeError as exc:
+        os.remove(filepath)
+        return str(exc), 503
+
+    if not resume_text.strip():
+        os.remove(filepath)
+        if not is_tesseract_available():
+            return (
+                "This PDF appears to be scanned, but Tesseract OCR is not installed. "
+                "Install Tesseract OCR and restart the app. On Windows, set TESSERACT_CMD "
+                "to the path of tesseract.exe if it is not on PATH.",
+                503,
+            )
+        return "The resume PDF contains no readable text. Upload a text-based PDF or enable OCR for scanned PDFs.", 400
+
     job_text = selected_job["job_description"]
     minimum_score = selected_job["minimum_score"]
     selected_skills = {

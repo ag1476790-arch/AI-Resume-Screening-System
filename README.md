@@ -43,7 +43,7 @@ python app.py
 # opens at http://127.0.0.1:5000
 ```
 
-Notes: The app uses a local SQLite database (`jobs.db`) and stores uploaded resumes under `uploads/resumes/`.
+Notes: The app uses a local SQLite database (`jobs.db`) and stores uploaded resumes under `uploads/resumes/`. Scanned PDFs require the Tesseract OCR executable in addition to the Python dependencies. On Windows, install Tesseract OCR and set `TESSERACT_CMD` to the full path of `tesseract.exe` if it is not on `PATH`. Restart the app after installation. The Docker deployment installs Tesseract automatically.
 
 ## Web routes (quick reference)
 - `/` — Home

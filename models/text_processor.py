@@ -1,5 +1,6 @@
 import re
 from collections import Counter
+from functools import lru_cache
 
 try:
     import nltk
@@ -14,6 +15,7 @@ except Exception:  # pragma: no cover - dependency guard
     word_tokenize = None
 
 
+@lru_cache(maxsize=1)
 def ensure_nltk_data():
     if nltk is None:
         return False
@@ -32,6 +34,11 @@ def ensure_nltk_data():
         except LookupError:
             nltk.download(package_name, quiet=True)
     return True
+
+
+@lru_cache(maxsize=1)
+def _english_stop_words():
+    return frozenset(stopwords.words("english"))
 
 
 def normalize_text(text):
@@ -57,7 +64,7 @@ def preprocess_text(text, use_stemming=True, use_lemmatization=True):
     ensure_nltk_data()
 
     tokens = word_tokenize(normalized)
-    stop_words = set(stopwords.words("english"))
+    stop_words = _english_stop_words()
     lemmatizer = WordNetLemmatizer()
     stemmer = PorterStemmer()
 

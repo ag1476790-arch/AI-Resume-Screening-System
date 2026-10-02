@@ -63,6 +63,9 @@
         <label>Or upload job description PDF</label>
         <input type="file" name="job_description_file" accept=".pdf">
 
+        <button type="button" id="extractSkills" class="add-skill">Extract Skills</button>
+        <p id="skillExtractionStatus" role="status" aria-live="polite"></p>
+
         <h3>Required Skills & Priority</h3>
 
         <div class="skills" id="skillsContainer">
@@ -164,22 +167,97 @@
 <script>
     const skillsContainer = document.getElementById("skillsContainer");
     const addSkillButton = document.getElementById("addSkill");
+    const extractSkillsButton = document.getElementById("extractSkills");
+    const extractionStatus = document.getElementById("skillExtractionStatus");
+    const jobForm = skillsContainer.closest("form");
 
-    addSkillButton.addEventListener("click", () => {
+    function addSkillRow(skill = "", priority = "") {
         const row = document.createElement("div");
         row.className = "skill-row";
-        const skillNumber = skillsContainer.children.length + 1;
-        row.innerHTML = `
-            <input type="text" name="skill" placeholder="Skill ${skillNumber}" required>
-            <input type="number" name="priority" placeholder="Priority" min="1" required>
-            <button type="button" class="remove-skill" aria-label="Remove skill">Remove</button>
-        `;
+
+        const skillInput = document.createElement("input");
+        skillInput.type = "text";
+        skillInput.name = "skill";
+        skillInput.placeholder = `Skill ${skillsContainer.children.length + 1}`;
+        skillInput.value = skill;
+        skillInput.required = true;
+
+        const priorityInput = document.createElement("input");
+        priorityInput.type = "number";
+        priorityInput.name = "priority";
+        priorityInput.placeholder = "Priority";
+        priorityInput.min = "1";
+        priorityInput.value = priority;
+        priorityInput.required = true;
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "remove-skill";
+        removeButton.setAttribute("aria-label", "Remove skill");
+        removeButton.textContent = "Remove";
+
+        row.append(skillInput, priorityInput, removeButton);
         skillsContainer.appendChild(row);
+    }
+
+    addSkillButton.addEventListener("click", () => {
+        addSkillRow();
     });
 
     skillsContainer.addEventListener("click", (event) => {
         if (event.target.classList.contains("remove-skill")) {
             event.target.closest(".skill-row").remove();
+        }
+    });
+
+    extractSkillsButton.addEventListener("click", async () => {
+        extractionStatus.textContent = "Extracting skills...";
+        extractSkillsButton.disabled = true;
+
+        try {
+            const response = await fetch("/extract_job_skills", {
+                method: "POST",
+                body: new FormData(jobForm),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || "Could not extract skills.");
+            }
+
+            const currentSkills = new Set(
+                Array.from(skillsContainer.querySelectorAll('input[name="skill"]'))
+                    .map(input => input.value.trim().toLowerCase())
+                    .filter(Boolean)
+            );
+            let addedCount = 0;
+
+            result.skills.forEach(skill => {
+                const normalizedSkill = skill.trim().toLowerCase();
+                if (!normalizedSkill || currentSkills.has(normalizedSkill)) {
+                    return;
+                }
+
+                const emptyRow = Array.from(skillsContainer.children).find(row =>
+                    !row.querySelector('input[name="skill"]').value.trim()
+                );
+                if (emptyRow) {
+                    emptyRow.querySelector('input[name="skill"]').value = skill;
+                } else {
+                    addSkillRow(skill);
+                }
+                currentSkills.add(normalizedSkill);
+                addedCount += 1;
+            });
+
+            extractionStatus.textContent = addedCount
+                ? `${addedCount} skill${addedCount === 1 ? "" : "s"} added. Assign a priority to each.`
+                : result.skills.length
+                    ? "The recognized skills are already listed. Assign their priorities."
+                    : "No recognized skills found. Add any missing skills manually.";
+        } catch (error) {
+            extractionStatus.textContent = error.message;
+        } finally {
+            extractSkillsButton.disabled = false;
         }
     });
 </script>

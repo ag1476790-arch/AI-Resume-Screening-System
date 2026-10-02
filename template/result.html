@@ -59,6 +59,10 @@
 
         </div>
 
+        {% if minimum_score is defined %}
+        <p>Minimum ATS score required: {{ minimum_score }}%</p>
+        {% endif %}
+
         <div class="prediction">
 
             {% if prediction == "Suitable" %}
