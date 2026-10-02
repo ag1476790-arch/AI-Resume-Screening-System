@@ -3,6 +3,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from threading import Barrier
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -70,17 +71,6 @@ class CompanyFormTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()['skills'], ['python'])
 
-    def test_pdf_comparison_page_has_configurable_threshold(self):
-        with app.test_client() as client:
-            response = client.get('/compare_pdfs')
-
-        self.assertEqual(response.status_code, 200)
-        html = response.get_data(as_text=True)
-        self.assertIn('name="minimum_score"', html)
-        self.assertIn('value="50"', html)
-        self.assertIn('min="0"', html)
-        self.assertIn('max="100"', html)
-
     def test_suitable_candidate_redirects_to_company_portal(self):
         temp_dir = tempfile.mkdtemp()
         db_path = os.path.join(temp_dir, 'test_jobs.db')
@@ -140,53 +130,90 @@ class CompanyFormTest(unittest.TestCase):
             app_module.DB_PATH = original_db_path
             app.config['UPLOAD_FOLDER'] = original_upload_folder
 
-    def test_compare_pdfs_extracts_skills_and_returns_score(self):
-        with patch('app.extract_text', side_effect=[
-            'python developer with flask and sql experience',
-            'python flask sql rest api and docker'
-        ]), patch('app.predict_resume', return_value={
-            'similarity': 92.0,
-            'skill_score': 88.0,
-            'ats_score': 90.4,
-            'prediction': 'Suitable',
-            'matched': ['python', 'flask', 'sql'],
-            'missing': []
-        }) as predict_mock:
-            with app.test_client() as client:
-                response = client.post(
-                    '/compare_pdfs',
-                    data={
-                        'resume_pdf': (io.BytesIO(b'%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF'), 'resume.pdf'),
-                        'job_description_pdf': (io.BytesIO(b'%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF'), 'job.pdf'),
-                        'minimum_score': '50',
-                    },
-                    content_type='multipart/form-data'
-                )
+    def test_company_portal_compares_all_applicants_and_shows_reasons(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = os.path.join(temp_dir, 'test_jobs.db')
+            original_db_path = app_module.DB_PATH
+            original_upload_folder = app.config['UPLOAD_FOLDER']
 
+            try:
+                app_module.DB_PATH = db_path
+                app.config['UPLOAD_FOLDER'] = temp_dir
+                app_module.init_db()
+                conn = sqlite3.connect(db_path)
+                conn.execute(
+                    """INSERT INTO jobs (
+                        company_name, job_title, job_description,
+                        skill1, priority1, skill2, priority2,
+                        minimum_score, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ('Acme', 'Developer', 'Python and AWS developer',
+                     'python', 5, 'aws', 3, 50, '2026-01-01 00:00:00'),
+                )
+                for name, created_at in (
+                    ('Maya Candidate', '2026-01-02 00:00:00'),
+                    ('Noah Candidate', '2026-01-01 00:00:00'),
+                ):
+                    conn.execute(
+                        """INSERT INTO applicants (
+                            applicant_name, email, resume_filename,
+                            ats_score, prediction, applied_company,
+                            applied_job, applied_job_id, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (name, f'{name.split()[0].lower()}@example.com',
+                         f'{name.split()[0].lower()}.pdf', 10, 'Not Suitable',
+                         'Acme', 'Developer', 1, created_at),
+                    )
+                conn.commit()
+                conn.close()
+
+                score_results = {
+                    'Maya Candidate': {
+                        'similarity': 60.0, 'skill_score': 80.0,
+                        'ats_score': 66.0, 'prediction': 'Suitable',
+                        'matched': ['python'], 'missing': ['aws'],
+                    },
+                    'Noah Candidate': {
+                        'similarity': 20.0, 'skill_score': 25.0,
+                        'ats_score': 21.5, 'prediction': 'Not Suitable',
+                        'matched': ['python'], 'missing': ['aws'],
+                    },
+                }
+                scoring_barrier = Barrier(2, timeout=3)
+
+                def score_concurrently(applicant, job):
+                    scoring_barrier.wait()
+                    return score_results[applicant['applicant_name']]
+
+                with patch(
+                    'app.score_saved_applicant',
+                    side_effect=score_concurrently,
+                ) as score_mock:
+                    with app.test_client() as client:
+                        response = client.post(
+                            '/company_portal/compare',
+                            data={'company_name': 'Acme', 'job_id': '1'},
+                        )
+
+                self.assertEqual(score_mock.call_count, 2)
                 self.assertEqual(response.status_code, 200)
                 html = response.get_data(as_text=True)
-                self.assertIn('ATS Score', html)
-                self.assertIn('python', html.lower())
-                self.assertIn('Minimum ATS score required: 50%', html)
+                self.assertIn('Maya Candidate', html)
+                self.assertIn('Noah Candidate', html)
+                self.assertIn('Passed: ATS score 66.00% meets the 50% minimum.', html)
+                self.assertIn('Failed: ATS score 21.50% is below the 50% minimum.', html)
+                self.assertIn('Missing required skills: aws', html)
 
-            self.assertEqual(predict_mock.call_args.kwargs['minimum_score'], 50)
-
-    def test_compare_pdfs_reports_missing_ocr_engine(self):
-        with patch('app.extract_text', side_effect=RuntimeError(
-            'Tesseract OCR is not installed.'
-        )):
-            with app.test_client() as client:
-                response = client.post(
-                    '/compare_pdfs',
-                    data={
-                        'resume_pdf': (io.BytesIO(b'%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF'), 'resume.pdf'),
-                        'job_description_pdf': (io.BytesIO(b'%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF'), 'job.pdf'),
-                    },
-                    content_type='multipart/form-data'
-                )
-
-        self.assertEqual(response.status_code, 503)
-        self.assertIn('Tesseract OCR is not installed', response.get_data(as_text=True))
+                conn = sqlite3.connect(db_path)
+                saved_results = conn.execute(
+                    'SELECT applicant_name, ats_score, prediction FROM applicants'
+                ).fetchall()
+                conn.close()
+                self.assertIn(('Maya Candidate', 66.0, 'Suitable'), saved_results)
+                self.assertIn(('Noah Candidate', 21.5, 'Not Suitable'), saved_results)
+            finally:
+                app_module.DB_PATH = original_db_path
+                app.config['UPLOAD_FOLDER'] = original_upload_folder
 
     def test_predict_resume_handles_compound_skill_lists(self):
         result = app_module.predict_resume(
@@ -228,22 +255,6 @@ class CompanyFormTest(unittest.TestCase):
         finally:
             text_processor.ensure_nltk_data.cache_clear()
             text_processor._english_stop_words.cache_clear()
-
-    def test_compare_pdfs_explains_when_ocr_is_unavailable(self):
-        with patch('app.extract_text', return_value=''), \
-             patch('app.is_tesseract_available', return_value=False):
-            with app.test_client() as client:
-                response = client.post(
-                    '/compare_pdfs',
-                    data={
-                        'resume_pdf': (io.BytesIO(b'%PDF-1.4'), 'resume.pdf'),
-                        'job_description_pdf': (io.BytesIO(b'%PDF-1.4'), 'job.pdf'),
-                    },
-                    content_type='multipart/form-data'
-                )
-
-        self.assertEqual(response.status_code, 503)
-        self.assertIn('Tesseract', response.get_data(as_text=True))
 
     def test_unreadable_resume_is_not_saved_or_scored(self):
         with tempfile.TemporaryDirectory() as temp_dir:

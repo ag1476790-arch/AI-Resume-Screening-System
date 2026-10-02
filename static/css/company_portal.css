@@ -78,6 +78,8 @@ table { width: 100%; border-collapse: collapse; }
 th, td { padding: 13px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; white-space: nowrap; }
 th { color: #475569; font-size: 13px; }
 small { color: #64748b; }
+.reason-cell { min-width: 260px; white-space: normal; }
+.reason-cell p { margin: 8px 0 0; color: #475569; line-height: 1.5; }
 
 .status { display: inline-block; padding: 5px 9px; border-radius: 999px; font-size: 13px; font-weight: 600; }
 .passed { background: #dcfce7; color: #166534; }

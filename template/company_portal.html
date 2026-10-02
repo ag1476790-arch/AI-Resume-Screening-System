@@ -85,11 +85,10 @@
             <input type="hidden" name="job_id" value="{{ selected_job.id }}">
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Select</th><th>Candidate</th><th>Resume</th><th>ATS Score</th><th>Status</th><th>Applied</th></tr></thead>
+                    <thead><tr><th>Candidate</th><th>Position</th><th>ATS Score</th><th>Status</th><th>Applied</th></tr></thead>
                     <tbody>
                     {% for applicant in applicants %}
                     <tr>
-                        <td><input type="checkbox" name="applicant_id" value="{{ applicant.id }}"></td>
                         <td><strong>{{ applicant.applicant_name }}</strong><br><small>{{ applicant.email }}</small></td>
                         <td>{{ applicant.applied_job }}</td>
                         <td>{{ applicant.ats_score }}%</td>
@@ -100,7 +99,7 @@
                     </tbody>
                 </table>
             </div>
-            <button class="compare-button" type="submit">Compare Selected Resumes</button>
+            <button class="compare-button" type="submit">Compare All Applicants</button>
         </form>
         {% else %}
         <p class="empty">No applicants have applied for this position yet.</p>
@@ -109,18 +108,20 @@
 
     {% if comparison_results %}
     <section class="panel">
-        <h2>Comparison Against Current Requirements</h2>
+        <h2>Results Against {{ selected_job.job_title }}</h2>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Candidate</th><th>Similarity</th><th>Skill Score</th><th>ATS Score</th><th>Result</th></tr></thead>
+                <thead><tr><th>Candidate</th><th>Similarity</th><th>Skill Score</th><th>ATS Score</th><th>Matched Skills</th><th>Missing Skills</th><th>Decision and Reason</th></tr></thead>
                 <tbody>
                 {% for item in comparison_results %}
                 <tr>
                     <td>{{ item.applicant.applicant_name }}</td>
-                    <td>{{ item.result.similarity }}%</td>
-                    <td>{{ item.result.skill_score }}%</td>
-                    <td>{{ item.result.ats_score }}%</td>
-                    <td><span class="status {{ 'passed' if item.result.prediction == 'Suitable' else 'failed' }}">{{ 'Shortlisted' if item.result.prediction == 'Suitable' else 'Failed' }}</span></td>
+                    <td>{{ item.result.similarity if item.result.similarity is not none else 'N/A' }}{% if item.result.similarity is not none %}%{% endif %}</td>
+                    <td>{{ item.result.skill_score if item.result.skill_score is not none else 'N/A' }}{% if item.result.skill_score is not none %}%{% endif %}</td>
+                    <td>{{ item.result.ats_score if item.result.ats_score is not none else 'N/A' }}{% if item.result.ats_score is not none %}%{% endif %}</td>
+                    <td>{{ item.result.matched|join(', ') if item.result.matched else 'None' }}</td>
+                    <td>{{ item.result.missing|join(', ') if item.result.missing else 'None' }}</td>
+                    <td class="reason-cell"><span class="status {{ 'passed' if item.result.prediction == 'Suitable' else 'failed' }}">{{ item.result.prediction }}</span><p>{{ item.reason }}</p></td>
                 </tr>
                 {% endfor %}
                 </tbody>

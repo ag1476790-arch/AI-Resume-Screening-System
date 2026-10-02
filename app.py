@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, render_template, request, redirect, url_for
+from concurrent.futures import ThreadPoolExecutor
 import os
 import sqlite3
 import json
@@ -219,7 +220,6 @@ def company_portal():
 def company_portal_compare():
     company_name = request.form["company_name"]
     job_id = int(request.form["job_id"])
-    applicant_ids = [int(value) for value in request.form.getlist("applicant_id")]
     jobs = get_job_history()
     company_jobs = [job for job in jobs if job["company_name"] == company_name]
     selected_job = next((job for job in company_jobs if job["id"] == job_id), None)
@@ -231,19 +231,81 @@ def company_portal_compare():
                 """
                 SELECT * FROM applicants
                 WHERE applied_company = ?
-                    AND (applied_job_id = ? OR (applied_job_id IS NULL AND applied_job = ?))
-                    AND id IN ({})
-                ORDER BY ats_score DESC
-                """.format(
-            ",".join("?" for _ in applicant_ids) or "NULL"
-        ),
-                [company_name, selected_job["id"], selected_job["job_title"], *applicant_ids],
+          AND (applied_job_id = ? OR (applied_job_id IS NULL AND applied_job = ?))
+        ORDER BY datetime(created_at) DESC
+        """,
+        (company_name, selected_job["id"], selected_job["job_title"]),
     ).fetchall()
     conn.close()
-    comparison_results = []
-    for applicant in applicants:
-        result = score_saved_applicant(applicant, selected_job)
-        comparison_results.append({"applicant": applicant, "result": result})
+
+    def compare_applicant(applicant):
+        try:
+            result = score_saved_applicant(applicant, selected_job)
+        except (OSError, RuntimeError, ValueError) as exc:
+            result = {
+                "similarity": None,
+                "skill_score": None,
+                "ats_score": None,
+                "prediction": "Not Evaluated",
+                "matched": [],
+                "missing": [],
+            }
+            reason = f"Not evaluated: {exc}"
+            score_update = None
+        else:
+            ats_score = result["ats_score"]
+            minimum_score = selected_job["minimum_score"]
+            if result["prediction"] == "Suitable":
+                reason = (
+                    f"Passed: ATS score {ats_score:.2f}% meets the "
+                    f"{minimum_score}% minimum."
+                )
+            else:
+                reason = (
+                    f"Failed: ATS score {ats_score:.2f}% is below the "
+                    f"{minimum_score}% minimum."
+                )
+            if result["missing"]:
+                reason += " Missing required skills: " + ", ".join(result["missing"]) + "."
+            score_update = (
+                result["similarity"],
+                result["skill_score"],
+                result["ats_score"],
+                result["prediction"],
+                applicant["id"],
+            )
+
+        return {
+            "applicant": applicant,
+            "result": result,
+            "reason": reason,
+            "score_update": score_update,
+        }
+
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(applicants)))) as executor:
+        comparison_results = list(executor.map(compare_applicant, applicants))
+    score_updates = [
+        item.pop("score_update")
+        for item in comparison_results
+        if item["score_update"] is not None
+    ]
+
+    conn = get_db_connection()
+    conn.executemany(
+        """UPDATE applicants
+           SET similarity_score = ?, skill_score = ?, ats_score = ?, prediction = ?
+           WHERE id = ?""",
+        score_updates,
+    )
+    conn.commit()
+    applicants = conn.execute(
+        """SELECT * FROM applicants
+           WHERE applied_company = ?
+             AND (applied_job_id = ? OR (applied_job_id IS NULL AND applied_job = ?))
+           ORDER BY ats_score DESC, datetime(created_at) DESC""",
+        (company_name, selected_job["id"], selected_job["job_title"]),
+    ).fetchall()
+    conn.close()
 
     companies = sorted({job["company_name"] for job in jobs})
     job_keywords = extract_keywords(selected_job["job_description"]) if selected_job else []
@@ -595,17 +657,6 @@ def extract_uploaded_pdf_text(uploaded_file):
             os.remove(temp_file)
 
 
-def infer_job_skills(job_text):
-    found_skills = extract_skills(job_text or "")
-    if found_skills:
-        return {skill: 5 for skill in found_skills}
-
-    keywords = extract_keywords(job_text or "")[:10]
-    if not keywords:
-        return {}
-    return {keyword: 4 for keyword in keywords}
-
-
 @app.route("/extract_job_skills", methods=["POST"])
 def extract_job_skills():
     job_text = (request.form.get("job_description") or "").strip()
@@ -693,6 +744,8 @@ def score_saved_applicant(applicant, job):
         applicant["resume_filename"],
     )
     resume_text = extract_text(resume_path)
+    if not resume_text.strip():
+        raise ValueError("The resume PDF contains no readable text.")
     skills = {
         skill["name"]: skill["priority"] for skill in get_job_skills(job)
     }
@@ -701,69 +754,6 @@ def score_saved_applicant(applicant, job):
         resume_text,
         skills,
         minimum_score=job["minimum_score"],
-    )
-
-
-# ----------------------------
-# DIRECT PDF COMPARISON
-# ----------------------------
-
-@app.route("/compare_pdfs", methods=["GET", "POST"])
-def compare_pdfs():
-    if request.method == "GET":
-        return render_template("pdf_compare.html", minimum_score=50)
-
-    try:
-        minimum_score = int(request.form.get("minimum_score", 50))
-    except (TypeError, ValueError):
-        return "Minimum ATS score must be a whole number from 0 to 100.", 400
-    if not 0 <= minimum_score <= 100:
-        return "Minimum ATS score must be between 0 and 100.", 400
-
-    resume_file = request.files.get("resume_pdf")
-    job_file = request.files.get("job_description_pdf")
-
-    if not resume_file or not resume_file.filename:
-        return "Please upload the applicant resume PDF.", 400
-    if not job_file or not job_file.filename:
-        return "Please upload the job description PDF.", 400
-
-    try:
-        resume_text = extract_uploaded_pdf_text(resume_file)
-        job_text = extract_uploaded_pdf_text(job_file)
-    except ValueError as exc:
-        return str(exc), 400
-    except RuntimeError as exc:
-        return str(exc), 503
-
-    if not resume_text.strip() or not job_text.strip():
-        if not is_tesseract_available():
-            return (
-                "This PDF appears to be scanned, but Tesseract OCR is not installed. "
-                "Install Tesseract OCR and restart the app. On Windows, set TESSERACT_CMD "
-                "to the path of tesseract.exe if it is not on PATH.",
-                503,
-            )
-        return "Both uploaded PDFs must contain readable text.", 400
-
-    required_skills = infer_job_skills(job_text)
-    result = predict_resume(
-        job_text,
-        resume_text,
-        required_skills,
-        minimum_score=minimum_score,
-    )
-
-    return render_template(
-        "result.html",
-        name="Resume vs Job Description",
-        similarity=result["similarity"],
-        skill_score=result["skill_score"],
-        ats_score=result["ats_score"],
-        prediction=result["prediction"],
-        matched=result["matched"],
-        missing=result["missing"],
-        minimum_score=minimum_score,
     )
 
 
@@ -806,9 +796,11 @@ def upload_resume():
     if resume_size > MAX_RESUME_SIZE:
         return "Resume file must be 5 MB or smaller.", 413
 
-    safe_filename = secure_filename(resume.filename)
-    if not safe_filename:
+    original_filename = secure_filename(resume.filename)
+    if not original_filename:
         return "Invalid resume filename.", 400
+    extension = os.path.splitext(original_filename)[1].lower()
+    safe_filename = f"{uuid.uuid4().hex}{extension}"
 
     filepath = os.path.join(
         app.config["UPLOAD_FOLDER"],
