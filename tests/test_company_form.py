@@ -23,6 +23,15 @@ class CompanyFormTest(unittest.TestCase):
             self.assertIn('name="job_description_file"', html)
             self.assertIn('id="extractSkills"', html)
 
+    def test_applicant_portal_hides_redundant_resume_compare_action(self):
+        with app.test_client() as client:
+            response = client.get('/applicant')
+
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertNotIn('Compare Resume to Job', html)
+        self.assertIn('View / Edit Resume History', html)
+
     def test_job_cannot_be_saved_without_skill_priority(self):
         with app.test_client() as client:
             response = client.post(
