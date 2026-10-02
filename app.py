@@ -555,9 +555,10 @@ def submit_job():
                 job_id,
             ),
         )
-        message = "Job Updated Successfully!"
+        success_title = "Job updated successfully"
+        message = f"{job_title} is updated and ready for applicants."
     else:
-        conn.execute(
+        cursor = conn.execute(
             """
             INSERT INTO jobs (
                 company_name,
@@ -597,7 +598,9 @@ def submit_job():
                 created_at,
             ),
         )
-        message = "Job Posted Successfully!"
+        job_id = cursor.lastrowid
+        success_title = "Job posted successfully"
+        message = f"{job_title} is published and ready for applicants."
     conn.commit()
     conn.close()
 
@@ -611,7 +614,18 @@ def submit_job():
 
     return render_template(
         "success.html",
-        message=message
+        eyebrow="Company Portal",
+        title=success_title,
+        message=message,
+        primary_url=url_for(
+            "company_portal",
+            company_name=company_name,
+            job_id=job_id,
+            view="requirements",
+        ),
+        primary_label="View Company Portal",
+        secondary_url=url_for("company"),
+        secondary_label="Post Another Job",
     )
 
 
@@ -878,25 +892,19 @@ def upload_resume():
     conn.commit()
     conn.close()
 
-    if result["prediction"] == "Suitable":
-        return redirect(
-            url_for(
-                "company_portal",
-                company_name=selected_job["company_name"],
-                job_id=selected_job["id"],
-                view="applicants",
-            )
-        )
-
     return render_template(
-        "result.html",
-        name=name,
-        similarity=result["similarity"],
-        skill_score=result["skill_score"],
-        ats_score=result["ats_score"],
-        prediction=result["prediction"],
-        matched=result["matched"],
-        missing=result["missing"]
+        "success.html",
+        eyebrow="Application submitted",
+        title="Resume submitted successfully",
+        message=(
+            f"Your application for {selected_job['job_title']} at "
+            f"{selected_job['company_name']} has been recorded. The hiring team "
+            "will review it with the other applicants."
+        ),
+        primary_url=url_for("home"),
+        primary_label="Home",
+        secondary_url=url_for("applicant"),
+        secondary_label="Submit Another Resume",
     )
 
 

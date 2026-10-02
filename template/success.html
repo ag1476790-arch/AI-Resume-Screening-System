@@ -6,47 +6,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Success</title>
-
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/success.css') }}">
-
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet">
+        <title>{{ title }} | AI Resume Screening System</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/success.css') }}">
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 
 </head>
 
 <body>
 
-<div class="container">
-
-    <div class="card">
-
-        <h1>🎉 Job Posted Successfully!</h1>
-
-        <p>
-
-            The job description has been submitted successfully.
-
-            Applicants can now upload their resumes for screening.
-
-        </p>
-
-        <div class="buttons">
-
-            <a href="/" class="btn">
-                Home
-            </a>
-
-            <a href="/applicant" class="btn">
-                Applicant Portal
-            </a>
-
+<header class="topbar">
+    <a class="brand" href="{{ url_for('home') }}">ATS<span> / </span>Resume Screening</a>
+    <a class="home-link" href="{{ url_for('home') }}">Home</a>
+</header>
+<main class="page-shell">
+    <section class="confirmation" aria-labelledby="confirmation-title">
+        <div class="checkmark" aria-hidden="true">&#10003;</div>
+        <p class="eyebrow">{{ eyebrow }}</p>
+        <h1 id="confirmation-title">{{ title }}</h1>
+        <p class="message">{{ message }}</p>
+        <div class="actions">
+            <a class="button primary" href="{{ primary_url }}">{{ primary_label }}</a>
+            <a class="button secondary" href="{{ secondary_url }}">{{ secondary_label }}</a>
         </div>
-
-    </div>
-
-</div>
+    </section>
+</main>
+<footer>AI Resume Screening System</footer>
 
 </body>
 

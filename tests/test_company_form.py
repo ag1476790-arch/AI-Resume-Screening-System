@@ -43,6 +43,38 @@ class CompanyFormTest(unittest.TestCase):
             response.get_data(as_text=True),
         )
 
+    def test_job_post_shows_confirmation_and_stylesheet(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = os.path.join(temp_dir, 'test_jobs.db')
+            original_db_path = app_module.DB_PATH
+            try:
+                app_module.DB_PATH = db_path
+                app_module.init_db()
+                with app.test_client() as client:
+                    response = client.post(
+                        '/submit_job',
+                        data={
+                            'company_name': 'Acme',
+                            'job_title': 'Developer',
+                            'job_description': 'Python developer',
+                            'skill': ['python'],
+                            'priority': ['5'],
+                            'minimum_score': '50',
+                        },
+                    )
+
+                    self.assertEqual(response.status_code, 200)
+                    html = response.get_data(as_text=True)
+                    self.assertIn('Job posted successfully', html)
+                    self.assertIn('View Company Portal', html)
+                    self.assertIn('Post Another Job', html)
+                    self.assertIn('/static/css/success.css', html)
+                    stylesheet_response = client.get('/static/css/success.css')
+                    self.assertEqual(stylesheet_response.status_code, 200)
+                    stylesheet_response.close()
+            finally:
+                app_module.DB_PATH = original_db_path
+
     def test_extract_job_skills_from_description(self):
         with patch('app.extract_skills', return_value=['python', 'aws']):
             with app.test_client() as client:
@@ -71,7 +103,7 @@ class CompanyFormTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()['skills'], ['python'])
 
-    def test_suitable_candidate_redirects_to_company_portal(self):
+    def test_suitable_candidate_sees_submission_confirmation(self):
         temp_dir = tempfile.mkdtemp()
         db_path = os.path.join(temp_dir, 'test_jobs.db')
         original_db_path = app_module.DB_PATH
@@ -124,8 +156,13 @@ class CompanyFormTest(unittest.TestCase):
                         content_type='multipart/form-data'
                     )
 
-                    self.assertEqual(response.status_code, 302)
-                    self.assertIn('/company_portal?company_name=Acme&job_id=1&view=applicants', response.location)
+                    self.assertEqual(response.status_code, 200)
+                    html = response.get_data(as_text=True)
+                    self.assertIn('Resume submitted successfully', html)
+                    self.assertIn('Your application for Python Developer at Acme', html)
+                    self.assertIn('href="/"', html)
+                    self.assertIn('Submit Another Resume', html)
+                    self.assertNotIn('company_portal?company_name=Acme', html)
         finally:
             app_module.DB_PATH = original_db_path
             app.config['UPLOAD_FOLDER'] = original_upload_folder
