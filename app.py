@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from models.predictor import predict_resume
+from models.skill_extractor import extract_skills
 from models.text_processor import preprocess_text, extract_keywords
 
 app = Flask(__name__, template_folder="template", static_folder="static")
@@ -563,6 +564,36 @@ def resolve_pdf_text(uploaded_file):
             os.remove(temp_file)
 
 
+def extract_uploaded_pdf_text(uploaded_file):
+    if not uploaded_file or not getattr(uploaded_file, "filename", None):
+        raise ValueError("Please upload a PDF file.")
+
+    if not uploaded_file.filename.lower().endswith(".pdf"):
+        raise ValueError("Only PDF files are supported.")
+
+    temp_file = os.path.join(
+        tempfile.gettempdir(),
+        f"compare_{uuid.uuid4().hex}.pdf",
+    )
+    uploaded_file.save(temp_file)
+    try:
+        return extract_text(temp_file)
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
+
+def infer_job_skills(job_text):
+    found_skills = extract_skills(job_text or "")
+    if found_skills:
+        return {skill: 5 for skill in found_skills}
+
+    keywords = extract_keywords(job_text or "")[:10]
+    if not keywords:
+        return {}
+    return {keyword: 4 for keyword in keywords}
+
+
 def extract_text(pdf_path):
     if not pdf_path or not os.path.exists(pdf_path):
         return ""
@@ -624,6 +655,49 @@ def score_saved_applicant(applicant, job):
         resume_text,
         skills,
         minimum_score=job["minimum_score"],
+    )
+
+
+# ----------------------------
+# DIRECT PDF COMPARISON
+# ----------------------------
+
+@app.route("/compare_pdfs", methods=["POST"])
+def compare_pdfs():
+    resume_file = request.files.get("resume_pdf")
+    job_file = request.files.get("job_description_pdf")
+
+    if not resume_file or not resume_file.filename:
+        return "Please upload the applicant resume PDF.", 400
+    if not job_file or not job_file.filename:
+        return "Please upload the job description PDF.", 400
+
+    try:
+        resume_text = extract_uploaded_pdf_text(resume_file)
+        job_text = extract_uploaded_pdf_text(job_file)
+    except ValueError as exc:
+        return str(exc), 400
+
+    if not resume_text.strip() or not job_text.strip():
+        return "Both uploaded PDFs must contain readable text.", 400
+
+    required_skills = infer_job_skills(job_text)
+    result = predict_resume(
+        job_text,
+        resume_text,
+        required_skills,
+        minimum_score=75,
+    )
+
+    return render_template(
+        "result.html",
+        name="Resume vs Job Description",
+        similarity=result["similarity"],
+        skill_score=result["skill_score"],
+        ats_score=result["ats_score"],
+        prediction=result["prediction"],
+        matched=result["matched"],
+        missing=result["missing"],
     )
 
 

@@ -75,8 +75,35 @@ class CompanyFormTest(unittest.TestCase):
                     self.assertEqual(response.status_code, 302)
                     self.assertIn('/company_portal?company_name=Acme&job_id=1&view=applicants', response.location)
         finally:
-            app.DB_PATH = original_db_path
+            app_module.DB_PATH = original_db_path
             app.config['UPLOAD_FOLDER'] = original_upload_folder
+
+    def test_compare_pdfs_extracts_skills_and_returns_score(self):
+        with patch('app.extract_text', side_effect=[
+            'python developer with flask and sql experience',
+            'python flask sql rest api and docker'
+        ]), patch('app.predict_resume', return_value={
+            'similarity': 92.0,
+            'skill_score': 88.0,
+            'ats_score': 90.4,
+            'prediction': 'Suitable',
+            'matched': ['python', 'flask', 'sql'],
+            'missing': []
+        }):
+            with app.test_client() as client:
+                response = client.post(
+                    '/compare_pdfs',
+                    data={
+                        'resume_pdf': (io.BytesIO(b'%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF'), 'resume.pdf'),
+                        'job_description_pdf': (io.BytesIO(b'%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF'), 'job.pdf'),
+                    },
+                    content_type='multipart/form-data'
+                )
+
+                self.assertEqual(response.status_code, 200)
+                html = response.get_data(as_text=True)
+                self.assertIn('ATS Score', html)
+                self.assertIn('python', html.lower())
 
 
 if __name__ == '__main__':
